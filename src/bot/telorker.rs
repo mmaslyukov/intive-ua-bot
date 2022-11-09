@@ -1,39 +1,42 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use frankenstein::{Update, UpdateContent};
 
-use crate::config::Config;
 
-use super::{telapi::Telapi, telecom::Telecom};
+use crate::user_data::UserData;
+
+use super::{
+    telapi::Telapi,
+    telecom::{self, Telecom},
+};
 
 pub struct Telorker {
     api: Arc<Telapi>,
     update: Update,
+    user_data: Arc<Mutex<UserData>>,
 }
 
 impl Telorker {
-    pub fn new(api: Arc<Telapi>, update: Update) -> Telorker {
-        Telorker { api, update }
+    pub fn new(api: Arc<Telapi>, update: Update, user_data: Arc<Mutex<UserData>>) -> Telorker {
+        Telorker {
+            api: api,
+            update,
+            user_data,
+        }
     }
 
     pub fn run(&self) {
-        let message = match &self.update.content {
-            UpdateContent::Message(message) => message,
-            UpdateContent::ChannelPost(channel_post) => channel_post,
+        let update = match &self.update.content {
+            UpdateContent::Message(message) => telecom::Update::Message(message.clone()),
+            UpdateContent::ChannelPost(channel_post) => {
+                telecom::Update::Message(channel_post.clone())
+            }
+            UpdateContent::CallbackQuery(callback_query) => {
+                telecom::Update::CallbackQuery(callback_query.clone())
+            }
             _ => return,
         };
 
-        if let Some(owner_id) = Config::owner_telegram_id() {
-            if message.from.is_none() {
-                return;
-            }
-
-            if message.from.as_ref().unwrap().id as i64 != owner_id {
-                return;
-            }
-        }
-        if let Some(h) = Telecom::telcom().make_cmd_handler(message.clone(), self.api.clone()) {
-            h.execute();
-        }
+        Telecom::handle(self.api.clone(), update, self.user_data.clone());
     }
 }

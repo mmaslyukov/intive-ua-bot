@@ -1,129 +1,146 @@
-pub mod cmd_help;
-pub mod cmd_test;
+use frankenstein::{CallbackQuery, Message};
+use std::str::FromStr;
+use std::sync::Mutex;
+use std::{fmt, sync::Arc};
 
-use frankenstein::Message;
-use log::info;
-use once_cell::sync::OnceCell;
-use rayon::iter::Once;
-use std::{
-    collections::{hash_map, HashMap},
-    fmt,
-    sync::{Arc, Mutex}, io::Error,
-};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use crate::bot::telapi::Telapi;
+use crate::user_data::UserData;
+use typed_builder::TypedBuilder as Builder;
 
-use self::cmd_help::Help;
 
-use super::telapi::{Telapi};
+use super::telapi::{Teleboard, TeleboardInline};
 
-#[derive(Debug, EnumIter, PartialEq, Hash)]
-pub enum BotCmd {
-    Help,
-    Start,
+pub enum Update {
+    Message(Message),
+    CallbackQuery(CallbackQuery),
+    None,
 }
 
-impl fmt::Display for BotCmd {
+#[derive(Clone, Debug)]
+pub enum ReplyEnum {
+    Text(String),
+    Keyboard(Teleboard),
+    KeyboardInline(ReplyInline),
+    None,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplyInline {
+    pub text: String,
+    pub keyboard: TeleboardInline,
+}
+impl ReplyInline {
+    pub fn new(text: &str, keyboard: TeleboardInline) -> Self {
+        Self {
+            text: text.to_string(),
+            keyboard,
+        }
+    }
+}
+
+#[derive(Builder, Debug, Default)]
+pub struct User {
+    pub first_name: String,
+    #[builder(setter(into, strip_option), default)]
+    pub last_name: Option<String>,
+    #[builder(setter(into, strip_option), default)]
+    pub username: Option<String>,
+}
+#[derive(Builder, Debug)]
+pub struct UserInput {
+    pub chat_id: i64,
+    pub text: String,
+    pub date: u64,
+    // pub user: User,
+}
+
+impl fmt::Display for UserInput {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
-        // or, alternatively:
-        // write!(f, "{:?}", self)
     }
 }
 
-pub trait Command {
-    // fn response(&self) -> String;
-    // fn message(&self) -> &Message;
-    // fn api(&self) -> Arc<Telapi>;
-    fn execute(&self) -> Result<(), Error>;
-
-    fn reply(&self, text: String) {
-        // let msg = self.message();
-        // if let Err(error) =
-        //     self.api()
-        //         .reply_with_text_message(msg.chat.id, text, Some(msg.message_id))
-        // {
-        //     log::error!("Failed to reply to update {:?} {:?}", error, msg);
-        // }
+impl UserInput {
+    pub fn from_msg(msg: &Message) -> Self {
+        Self::builder()
+            .chat_id(msg.chat.id)
+            .text(msg.text.clone().unwrap())
+            .date(msg.date)
+            .build()
     }
-
-    // fn _execute(&self, message: &Message) {
-    //     info!(
-    //         "{:?} wrote: {}",
-    //         message.chat.id,
-    //         message.text.as_ref().unwrap()
-    //     );
-
-    //     let text = self.response();
-    //     // self.reply_to_message(message, text)
-    // }
-
-    // fn reply_to_message(&self, message: &Message, text: String) {
-    //     if let Err(error) =
-    //         self.api()
-    //             .reply_with_text_message(message.chat.id, text, Some(message.message_id))
-    //     {
-    //         error!("Failed to reply to update {:?} {:?}", error, message);
-    //     }
-    // }
+    pub fn from_query(query: &CallbackQuery) -> Self {
+        Self::builder()
+            .chat_id(query.message.clone().unwrap().chat.id)
+            .text(query.data.clone().unwrap())
+            .date(query.message.clone().unwrap().date)
+            // .user(User::default())
+            .build()
+    }
 }
 
-type TelHash = HashMap<String, fn(Arc<Telapi>, Message) -> Box<dyn Command>>;
-static TELCOM: OnceCell<Telecom> = OnceCell::new();
-pub struct Telecom {
-    cmd_table: TelHash,
-}
+pub struct Telecom {}
 
 impl Telecom {
-    pub fn telcom() -> &'static Self {
-        TELCOM.get_or_init(|| Telecom::new())
-    }
-
-    fn new() -> Self {
-        let mut cmd_table: TelHash = HashMap::new();
-
-        cmd_table.insert(Self::cmd_to_string(&BotCmd::Help), Help::make_command);
-
-        Telecom { cmd_table }
-    }
-
-    pub fn make_cmd_handler(&self, msg: Message, api: Arc<Telapi>) -> Option<Box<dyn Command>> {
-        if let Some(cmd_name) = &msg.text {
-            if let Some(ch) = self.cmd_table.get(cmd_name) {
-                return Some(ch(api, msg));
-            }
+    fn handle_user_input(api: Arc<Telapi>, user_data: Arc<Mutex<UserData>>, user_input: UserInput) {
+        log::debug!("Got input: {}", user_input);
+        let result = user_data.lock().unwrap().handle_incoming_v2(&user_input);
+        if result.is_ok() {
+            Self::reply(api, &user_input, result.unwrap())
+        } else {
+            log::error!(
+                "Error: `{}",
+                result
+                    .err()
+                    .unwrap()
+                    .msg()
+                    .unwrap_or_else(|| String::from_str("unknonw").unwrap())
+            );
         }
-        None
     }
 
-    pub fn cmd_to_string(cmd: &BotCmd) -> String {
-        format!("/{}", cmd.to_string()).to_lowercase()
-    }
-
-    pub fn cmd_from_string(name: &str) -> Option<BotCmd> {
-        for cmd in BotCmd::iter() {
-            if name == Self::cmd_to_string(&cmd) {
-                return Some(cmd.into());
+    pub fn handle(api: Arc<Telapi>, update: Update, user_data: Arc<Mutex<UserData>>) {
+        match update {
+            Update::Message(msg) => {
+                Self::handle_user_input(api, user_data, UserInput::from_msg(&msg))
             }
+            Update::CallbackQuery(query) => {
+                Self::handle_user_input(api, user_data, UserInput::from_query(&query))
+            }
+            _ => {}
         }
-        None
+    }
+    pub fn reply(api: Arc<Telapi>, user_input: &UserInput, reply: ReplyEnum) {
+        match reply {
+            ReplyEnum::Text(txt) => {
+                api.reply_with_text_message(user_input.chat_id, txt, None)
+                    .map_err(|e| log::error!("error: {:?}", e))
+                    .unwrap();
+            }
+            ReplyEnum::Keyboard(kbrd) => {
+                api.reply_with_keyboard(user_input.chat_id, kbrd)
+                    .map_err(|e| log::error!("error: {:?}", e))
+                    .unwrap();
+            }
+            ReplyEnum::KeyboardInline(kbrd) => {
+                api.reply_with_keyboard_inline(user_input.chat_id, kbrd)
+                    .map_err(|e| log::error!("error: {:?}", e))
+                    .unwrap();
+            }
+            ReplyEnum::None => {}
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Telecom;
+    // use super::{BotQuery, Command, Telecom};
 
-    #[test]
-    fn test_cmd_to_string() {
-        assert_eq!(super::Telecom::cmd_to_string(&super::BotCmd::Help), "/help")
-    }
-
-    #[test]
-    fn test_cmd_from_string() {
-        assert_eq!(
-            super::Telecom::cmd_from_string("/help").unwrap(),
-            super::BotCmd::Help
-        );
-    }
+    // #[test]
+    // pub fn test_bot_query_enum() {
+    //     assert_eq!(
+    //         BotQuery::Register,
+    //         BotQuery::from_string_begins("register_new_user").unwrap()
+    //     );
+    //     assert_eq!(None, BotQuery::from_string_begins("/register_new_user"));
+    // }
 }

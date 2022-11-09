@@ -1,0 +1,14 @@
+[Unit]
+Description=Intive Ukraine Guardian Bot
+After=network.target
+#StartLimitIntervalSec=0
+[Service]
+#Type=simple
+Restart=always
+#RestartSec=1
+#User=user
+WorkingDirectory=/home/mimas/guardian/
+ExecStart=/home/mimas/guardian/guardian
+
+[Install]
+WantedBy=multi-user.target

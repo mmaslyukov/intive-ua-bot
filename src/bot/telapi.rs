@@ -1,24 +1,29 @@
 use crate::config::Config;
 use crate::http_client;
-// use fang::FangError;
-use frankenstein::AllowedUpdate;
 use frankenstein::ErrorResponse;
-use frankenstein::GetUpdatesParams;
+use frankenstein::InlineKeyboardButton;
+use frankenstein::InlineKeyboardMarkup;
+use frankenstein::KeyboardButton;
 use frankenstein::ParseMode;
+use frankenstein::ReplyKeyboardMarkup;
+use frankenstein::ReplyMarkup;
 use frankenstein::SendMessageParams;
 use frankenstein::TelegramApi;
-use frankenstein::Update;
-use isahc::config::RedirectPolicy;
 use isahc::prelude::*;
-use isahc::HttpClient;
 use isahc::Request;
+use log::*;
 use once_cell::sync::OnceCell;
-use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
+
+use super::telecom::ReplyInline;
 
 static API: OnceCell<Telapi> = OnceCell::new();
+
+pub type Telerow = Vec<KeyboardButton>;
+pub type Teleboard = Vec<Telerow>;
+
+pub type TelerowInline = Vec<InlineKeyboardButton>;
+pub type TeleboardInline = Vec<TelerowInline>;
 
 #[derive(Clone, Debug)]
 pub struct Telapi {
@@ -44,25 +49,68 @@ impl Default for Telapi {
 }
 
 impl Telapi {
-    pub fn new() -> Telapi {
+    pub fn new() -> Self {
         let token = Config::telegram_bot_token();
         let base_url = Config::telegram_base_url();
         let api_url = format!("{}{}", base_url, token);
-        let http_client = HttpClient::builder()
-            .redirect_policy(RedirectPolicy::Limit(10))
-            .timeout(Config::request_timeout_in_seconds().duration())
-            .build()
-            .unwrap();
-
-        let update_params = GetUpdatesParams::builder()
-            .allowed_updates(vec![AllowedUpdate::Message, AllowedUpdate::ChannelPost])
-            .build();
-
-        Telapi { api_url }
+        Self { api_url }
     }
 
     pub fn send_text_message(&self, chat_id: i64, message: String) -> Result<(), Error> {
         self.reply_with_text_message(chat_id, message, None)
+    }
+
+    pub fn reply_with_keyboard(&self, chat_id: i64, keyboard: Teleboard) -> Result<(), Error> {
+        // let keyboard_markup = InlineKeyboardMarkup::builder().inline_keyboard(keyboard).build();
+        let keyboard_markup = ReplyKeyboardMarkup::builder()
+            .resize_keyboard(true)
+            .keyboard(keyboard)
+            .build();
+
+        let send_message_params = SendMessageParams::builder()
+            .chat_id(chat_id)
+            .text("hello!")
+            // .reply_markup(ReplyMarkup::InlineKeyboardMarkup(keyboard_markup))
+            .reply_markup(ReplyMarkup::ReplyKeyboardMarkup(keyboard_markup))
+            .build();
+
+        match self.send_message(&send_message_params) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!(
+                    "Failed to send message {:?}: {:?}",
+                    err, send_message_params
+                );
+                Err(err)
+            }
+        }
+    }
+
+    pub fn reply_with_keyboard_inline(
+        &self,
+        chat_id: i64,
+        reply: ReplyInline,
+    ) -> Result<(), Error> {
+        let keyboard_markup = InlineKeyboardMarkup::builder()
+            .inline_keyboard(reply.keyboard)
+            .build();
+
+        let send_message_params = SendMessageParams::builder()
+            .chat_id(chat_id)
+            .text(reply.text)
+            .reply_markup(ReplyMarkup::InlineKeyboardMarkup(keyboard_markup))
+            .build();
+
+        match self.send_message(&send_message_params) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!(
+                    "Failed to send message {:?}: {:?}",
+                    err, send_message_params
+                );
+                Err(err)
+            }
+        }
     }
 
     pub fn reply_with_text_message(
@@ -89,10 +137,9 @@ impl Telapi {
         match self.send_message(&send_message_params) {
             Ok(_) => Ok(()),
             Err(err) => {
-                log::error!(
+                error!(
                     "Failed to send message {:?}: {:?}",
-                    err,
-                    send_message_params
+                    err, send_message_params
                 );
                 Err(err)
             }
@@ -116,13 +163,11 @@ impl TelegramApi for Telapi {
             None => {
                 let request = request_builder.body(())?;
                 http_client::client().send(request)?
-                // self.http_client.send(request)?
             }
             Some(data) => {
                 let json = serde_json::to_string(&data).unwrap();
                 let request = request_builder.body(json)?;
                 http_client::client().send(request)?
-                // self.http_client.send(request)?
             }
         };
 

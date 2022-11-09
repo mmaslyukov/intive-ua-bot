@@ -1,6 +1,8 @@
 use std::fmt::{Debug, Display};
-use std::time::Duration;
+use std::time;
 use std::{env, str::FromStr};
+
+use crate::db::utils::DatabaseSource;
 
 pub struct Config;
 pub struct Timeout {
@@ -13,12 +15,20 @@ impl Timeout {
     pub fn seconds(&self) -> u64 {
         self.sec
     }
-    pub fn duration(&self) -> Duration {
-        Duration::from_secs(self.sec)
+    pub fn duration(&self) -> time::Duration {
+        time::Duration::from_secs(self.sec)
     }
 }
 
 impl Config {
+    pub fn database_location() -> DatabaseSource {
+        DatabaseSource::File("guardian.db".into())
+    }
+
+    pub fn time_format() -> &'static str {
+        "%Y-%m-%d %H:%M:%S"
+    }
+
     pub fn telegram_base_url() -> String {
         Self::read_var_with_default("TELEGRAM_BASE_URL", "https://api.telegram.org/bot")
     }
@@ -28,7 +38,7 @@ impl Config {
     }
 
     pub fn telegram_pool_thread_number() -> u64 {
-        Self::read_var_with_default("TELEGRAM_POOL_THREAD_NUMBER", 3)
+        Self::read_var_with_default("TELEGRAM_POOL_THREAD_NUMBER", 10)
     }
 
     pub fn request_timeout_in_seconds() -> Timeout {
