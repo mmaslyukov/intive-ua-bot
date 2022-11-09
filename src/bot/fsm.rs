@@ -15,6 +15,7 @@ use crate::{
 };
 
 use super::{telecom::ReplyEnum, utils, Error};
+use prettytable::{format, row, table};
 
 #[derive(Debug, EnumIter, PartialEq, Hash, Eq, Clone, Default)]
 pub enum Event {
@@ -267,7 +268,11 @@ impl Data {
         let summary = make_report(report_type, offset);
         let mut text = String::default();
         let mut period: report::TimeOffset = report::TimeOffset::default();
+        let mut table = table!();
         if summary.is_ok() {
+            table.set_titles(row!["#", "Full Name", "Availability", "Updated"]);
+            table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+
             if summary.as_ref().unwrap().len() > 0 {
                 period = summary.as_ref().unwrap().first().unwrap().period.clone();
             }
@@ -275,25 +280,39 @@ impl Data {
             for s in summary.unwrap() {
                 idx += 1;
                 let days = (Utc::now() - s.last_update).num_days();
-                text.push_str(
+                table.add_row(row![
+                    format!("{idx}"),
+                    format!("{}", s.name),
+                    format!("{:.1} %", s.availability * 100.0),
                     format!(
-                        "{}. {}, availbale:{:.1}%, last update:{} \n",
-                        idx,
-                        s.name,
-                        s.availability * 100.0,
+                        "{}",
                         if days != 0 {
                             format!("{} days ago", days)
                         } else {
                             "Today".into()
                         }
                     )
-                    .as_str(),
-                );
+                ]);
+
+                // text.push_str(
+                //     format!(
+                //         "{}. {}, available:{:.1}%, last update:{} \n",
+                //         idx,
+                //         s.name,
+                //         s.availability * 100.0,
+                //         if days != 0 {
+                //             format!("{} days ago", days)
+                //         } else {
+                //             "Today".into()
+                //         }
+                //     )
+                //     .as_str(),
+                // );
             }
         }
 
         self.reply = Some(utils::make_reply_text(
-            format!("Report [{}]:\n{}", period, text).as_str(),
+            format!("<pre>Report [{}]:\n{}\n</pre>", period, table.to_string()).as_str(),
         ));
         // log::debug!("Report [{}]:\n{}", period, text);
 
@@ -469,9 +488,13 @@ impl State {
                 Data::on_survey,
             ),
             (s, e @ Event::Help) => Transition::make_general(s, e, Data::on_help),
-            (s, e @ Event::Rename) => {
-                Transition::make_valid(State::Idle, State::RegName, s.data().clone(), e, Data::on_start)
-            }
+            (s, e @ Event::Rename) => Transition::make_valid(
+                State::Idle,
+                State::RegName,
+                s.data().clone(),
+                e,
+                Data::on_start,
+            ),
 
             (s, e) => Transition::make_shallow(s, e),
         }
@@ -688,10 +711,8 @@ fn make_report(
     Ok(report_summary)
 }
 
-
 #[cfg(test)]
 mod tests {
     #[test]
-    pub fn test_fsm_alt() {
-    }
+    pub fn test_fsm_alt() {}
 }
