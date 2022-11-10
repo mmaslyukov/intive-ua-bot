@@ -1,4 +1,5 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
+use serde::__private::de;
 use core::fmt;
 use typed_builder::TypedBuilder as Builder;
 
@@ -241,13 +242,15 @@ pub fn survey_save(data: &Data) -> Result<(), Error> {
                 NaiveDateTime::parse_from_str(&report.timestamp.value, Config::time_format())
             {
                 let utc = DateTime::<Utc>::from_utc(date_time, Utc);
-                if Utc::now().signed_duration_since(utc) > chrono::Duration::minutes(10) {
+                let delta = chrono::Duration::minutes(10) - Utc::now().signed_duration_since(utc);
+                if delta < chrono::Duration::zero() {
                     insert_survey = true;
                 } else {
                     result = Error::Verbose(format!(
-                        "Too many requests now: {}, last on: {}",
+                        "Too many requests now: {}, last on: {}, plesase wait for {} minute(s) ",
                         Utc::now().format(Config::time_format()),
                         report.timestamp.value,
+                        delta.num_minutes() + 1,
                     ))
                     .wrap();
                 }
