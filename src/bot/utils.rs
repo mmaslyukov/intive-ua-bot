@@ -110,7 +110,8 @@ pub fn make_reply_menu<T: fmt::Display + UserDisplay>(
         for row in range {
             let mut kbd_row = Telerow::new();
             for cell in *row {
-                let btn_text = cell.to_user_string();
+                let btn_text = format!("/{}\n", cell.to_string().to_lowercase());
+                // let btn_text = cell.to_user_string();
                 let btn = KeyboardButton::builder().text(&btn_text).build();
                 kbd_row.push(btn);
             }
