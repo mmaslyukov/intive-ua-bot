@@ -83,7 +83,6 @@ impl Report {
                 .cond_time(offset)
                 .get(),
         )
-
     }
 
     pub fn select_many_by<T: fmt::Display>(&self, h: &Header<T>) -> rusqlite::Result<Vec<Self>> {
@@ -121,7 +120,7 @@ impl Report {
 
     pub fn select_one_by<T: fmt::Display>(&self, h: &Header<T>) -> rusqlite::Result<Self> {
         let conn = utils::open(Config::database_location())?;
-       
+
         let query = ReportQueryBuilder::new()
             .select()
             .where_()
@@ -230,7 +229,6 @@ impl ReportQueryBuilder {
     }
 }
 
-
 pub fn survey_save(data: &Data) -> Result<(), Error> {
     let mut result: Result<(), Error> = Ok(());
     let report = Report::from(data.clone());
@@ -264,10 +262,7 @@ pub fn survey_save(data: &Data) -> Result<(), Error> {
         }
     }
 
-    log::debug!(
-        "insert_survey:{}",
-        insert_survey
-    );
+    log::debug!("insert_survey:{}", insert_survey);
     if insert_survey {
         let mut user = user_table::User::from(data.clone());
         let result = user.select_one_by(&user.chat_id);
@@ -284,8 +279,6 @@ pub fn survey_save(data: &Data) -> Result<(), Error> {
     }
     result
 }
-
-
 
 #[cfg(test)]
 mod tests {

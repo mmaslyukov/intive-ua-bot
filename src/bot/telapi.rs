@@ -16,6 +16,7 @@ use once_cell::sync::OnceCell;
 use std::path::PathBuf;
 
 use super::telecom::ReplyInline;
+use super::telecom::ReplyMenu;
 
 static API: OnceCell<Telapi> = OnceCell::new();
 
@@ -60,17 +61,15 @@ impl Telapi {
         self.reply_with_text_message(chat_id, message, None)
     }
 
-    pub fn reply_with_keyboard(&self, chat_id: i64, keyboard: Teleboard) -> Result<(), Error> {
-        // let keyboard_markup = InlineKeyboardMarkup::builder().inline_keyboard(keyboard).build();
+    pub fn reply_with_keyboard(&self, chat_id: i64, menu: ReplyMenu) -> Result<(), Error> {
         let keyboard_markup = ReplyKeyboardMarkup::builder()
             .resize_keyboard(true)
-            .keyboard(keyboard)
+            .keyboard(menu.keyboard)
             .build();
 
         let send_message_params = SendMessageParams::builder()
             .chat_id(chat_id)
-            .text("hello!")
-            // .reply_markup(ReplyMarkup::InlineKeyboardMarkup(keyboard_markup))
+            .text(menu.text)
             .reply_markup(ReplyMarkup::ReplyKeyboardMarkup(keyboard_markup))
             .build();
 
@@ -167,6 +166,7 @@ impl TelegramApi for Telapi {
             Some(data) => {
                 let json = serde_json::to_string(&data).unwrap();
                 let request = request_builder.body(json)?;
+                //log::warn!("{:?}", request);
                 http_client::client().send(request)?
             }
         };

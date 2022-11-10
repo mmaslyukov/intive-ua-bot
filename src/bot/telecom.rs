@@ -7,7 +7,6 @@ use crate::bot::telapi::Telapi;
 use crate::user_data::UserData;
 use typed_builder::TypedBuilder as Builder;
 
-
 use super::telapi::{Teleboard, TeleboardInline};
 
 pub enum Update {
@@ -19,7 +18,7 @@ pub enum Update {
 #[derive(Clone, Debug)]
 pub enum ReplyEnum {
     Text(String),
-    Keyboard(Teleboard),
+    KeyboardMenu(ReplyMenu),
     KeyboardInline(ReplyInline),
     None,
 }
@@ -31,6 +30,19 @@ pub struct ReplyInline {
 }
 impl ReplyInline {
     pub fn new(text: &str, keyboard: TeleboardInline) -> Self {
+        Self {
+            text: text.to_string(),
+            keyboard,
+        }
+    }
+}
+#[derive(Clone, Debug)]
+pub struct ReplyMenu {
+    pub text: String,
+    pub keyboard: Teleboard,
+}
+impl ReplyMenu {
+    pub fn new(text: &str, keyboard: Teleboard) -> Self {
         Self {
             text: text.to_string(),
             keyboard,
@@ -116,8 +128,8 @@ impl Telecom {
                     .map_err(|e| log::error!("error: {:?}", e))
                     .unwrap();
             }
-            ReplyEnum::Keyboard(kbrd) => {
-                api.reply_with_keyboard(user_input.chat_id, kbrd)
+            ReplyEnum::KeyboardMenu(menu) => {
+                api.reply_with_keyboard(user_input.chat_id, menu)
                     .map_err(|e| log::error!("error: {:?}", e))
                     .unwrap();
             }

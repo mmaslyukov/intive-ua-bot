@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use frankenstein::{Update, UpdateContent};
 
-
 use crate::user_data::UserData;
 
 use super::{

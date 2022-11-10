@@ -33,4 +33,3 @@ pub fn query_wrapper(query: String) -> String {
     log::debug!("#SQL: [{}]", query_final);
     query_final
 }
-

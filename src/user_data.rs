@@ -28,10 +28,8 @@ impl UserData {
     pub fn init(mut self) -> Self {
         if let Ok(report) = report::Report::new().select_all() {
             for r in report {
-                self.user_data_table.insert(
-                    r.chat_id.value,
-                    Data::from(r).wrap(fsm::State::Idle),
-                );
+                self.user_data_table
+                    .insert(r.chat_id.value, Data::from(r).wrap(fsm::State::Idle));
             }
         }
         self

@@ -26,6 +26,7 @@ pub enum Event {
     Rename,
     Start,
     Survey,
+    Menu,
     Back,
     Name(String),
     Allright,
@@ -151,6 +152,12 @@ impl Data {
         self.reply = Some(utils::reply_help_event());
         Ok(())
     }
+    fn on_menu(&mut self, _e: Event) -> Result<(), Error> {
+        self.reply = Some(utils::reply_menu_texted(
+            "Here is your menu, sir/ma'am/homie",
+        ));
+        Ok(())
+    }
     fn on_survey(&mut self, _e: Event) -> Result<(), Error> {
         self.reply = Some(utils::reply_survey_event());
         Ok(())
@@ -206,7 +213,7 @@ impl Data {
         Ok(())
     }
     fn on_survey_more(&mut self, _e: Event) -> Result<(), Error> {
-        self.reply = Some(utils::make_reply(
+        self.reply = Some(utils::make_reply_inline(
             "What's up?",
             Some(&[
                 &[Event::NoNetwork, Event::NoElectricity],
@@ -266,7 +273,6 @@ impl Data {
         let report_type = self.report.as_ref().unwrap().report_type.clone();
         let offset = self.report.as_ref().unwrap().offset.clone();
         let summary = make_report(report_type, offset);
-        let mut text = String::default();
         let mut period: report::TimeOffset = report::TimeOffset::default();
         let mut table = table!();
         if summary.is_ok() {
@@ -279,7 +285,7 @@ impl Data {
             let mut idx = 0;
             for s in summary.unwrap() {
                 idx += 1;
-                let days = (Utc::now() - s.last_update).num_days();
+                let days = (Utc::now().date() - s.last_update.date()).num_days();
                 table.add_row(row![
                     format!("{idx}"),
                     format!("{}", s.name),
@@ -488,6 +494,7 @@ impl State {
                 Data::on_survey,
             ),
             (s, e @ Event::Help) => Transition::make_general(s, e, Data::on_help),
+            (s, e @ Event::Menu) => Transition::make_general(s, e, Data::on_menu),
             (s, e @ Event::Rename) => Transition::make_valid(
                 State::Idle,
                 State::RegName,
