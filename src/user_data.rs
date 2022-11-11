@@ -27,9 +27,13 @@ impl UserData {
 
     pub fn init(mut self) -> Self {
         if let Ok(report) = report::Report::new().select_all() {
+            let mut map: HashMap<String, report::Report> = HashMap::new();
             for r in report {
+                map.insert(r.name.value.clone(), r);
+            }
+            for m in map {
                 self.user_data_table
-                    .insert(r.chat_id.value, Data::from(r).wrap(fsm::State::Idle));
+                    .insert(m.1.chat_id.value, Data::from(m.1).wrap(fsm::State::Idle));
             }
         }
         self

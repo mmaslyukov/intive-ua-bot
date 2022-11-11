@@ -25,7 +25,7 @@ pub fn reply_help_event() -> ReplyEnum {
 }
 
 pub fn reply_start_event() -> ReplyEnum {
-    make_reply_text("Enter your name")
+    make_reply_text("Enter your Full name (the same as in company profile)")
     // reply_menu_texted("Enter your name")
 }
 

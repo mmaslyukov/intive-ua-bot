@@ -46,6 +46,14 @@ impl fmt::Display for TimeOffset {
         fmt::Debug::fmt(self, f)
     }
 }
+// impl TimeOffset {
+//     fn to_string(&self) {
+//         match self {
+//             TimeOffset::Day(d) => {format!("Day(s) - {}")}
+//         }
+//     }
+
+// }
 
 impl Report {
     pub fn new() -> Self {
@@ -206,7 +214,7 @@ impl ReportQueryBuilder {
         };
 
         self.query.push_str(&format!(
-            " strftime('{}', {}) >= strftime('{}', '{}', '{}') ",
+            " strftime('{}', {}) >= strftime('{}', '{}', '-{}') ",
             format_time,
             r.timestamp.name,
             format_time,

@@ -47,9 +47,9 @@ impl Teladler {
         let api = self.api.clone();
         let user_data = self.user_data.clone();
         thread::spawn(move || loop {
-            thread::sleep(time::Duration::from_secs(60));
             let chat_id_collection = user_data.lock().unwrap().find_expired();
             Self::initiate_survey(api.clone(), user_data.clone(), chat_id_collection);
+            thread::sleep(time::Duration::from_secs(60));
         });
     }
 

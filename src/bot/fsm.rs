@@ -1,8 +1,10 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use typed_builder::TypedBuilder as Builder;
 
 use core::fmt;
 use std::{
+    cmp::Ordering,
+    // time::Duration,
     collections::HashMap,
     str::{self, FromStr},
 };
@@ -208,7 +210,7 @@ impl Data {
                 format!("{}", e.to_string()).as_str(),
             ));
         } else {
-            self.reply = Some(utils::make_reply_text("Take care"));
+            self.reply = Some(utils::reply_menu_texted("Take care"));
         }
         Ok(())
     }
@@ -244,7 +246,7 @@ impl Data {
                 format!("{}", e.to_string()).as_str(),
             ));
         } else {
-            self.reply = Some(utils::make_reply_text("Take care"));
+            self.reply = Some(utils::reply_menu_texted("Take care"));
         }
 
         result
@@ -255,33 +257,38 @@ impl Data {
     }
     fn on_report_offset(&mut self, e: Event) -> Result<(), Error> {
         let mut result: Result<(), Error> = Ok(());
+        let mut report_startpoint = Utc::now();
         if self.report.is_none() {
             self.report = Some(ReportData::default());
         }
+        let utc = Utc::now();
         match e {
             Event::ReportOffsetDay => {
-                self.report.as_mut().unwrap().offset = report::TimeOffset::Day(-1)
+                report_startpoint = utc.with_day(utc.day() - 1).unwrap();
+                self.report.as_mut().unwrap().offset = report::TimeOffset::Day(1)
             }
             Event::ReportOffsetWeek => {
-                self.report.as_mut().unwrap().offset = report::TimeOffset::Day(-7)
+                report_startpoint = utc.with_day(utc.day() - 7).unwrap();
+                self.report.as_mut().unwrap().offset = report::TimeOffset::Day(7)
             }
             Event::ReportOffsetMonth => {
-                self.report.as_mut().unwrap().offset = report::TimeOffset::Month(-1)
+                report_startpoint = utc.with_month(utc.month() - 1).unwrap();
+                self.report.as_mut().unwrap().offset = report::TimeOffset::Month(1)
             }
             _ => result = Error::Verbose(format!("Unexpected event: {}", e)).wrap(),
         }
         let report_type = self.report.as_ref().unwrap().report_type.clone();
         let offset = self.report.as_ref().unwrap().offset.clone();
         let summary = make_report(report_type, offset);
-        let mut period: report::TimeOffset = report::TimeOffset::default();
+        // let mut period: report::TimeOffset = report::TimeOffset::default();
         let mut table = table!();
         if summary.is_ok() {
-            table.set_titles(row!["#", "Full Name", "Availability", "Updated"]);
+            table.set_titles(row!["#", "Full Name", "Electricity", "Network", "Updated"]);
             table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
 
-            if summary.as_ref().unwrap().len() > 0 {
-                period = summary.as_ref().unwrap().first().unwrap().period.clone();
-            }
+            // if summary.as_ref().unwrap().len() > 0 {
+            //     period = summary.as_ref().unwrap().first().unwrap().period.clone();
+            // }
             let mut idx = 0;
             for s in summary.unwrap() {
                 idx += 1;
@@ -289,7 +296,8 @@ impl Data {
                 table.add_row(row![
                     format!("{idx}"),
                     format!("{}", s.name),
-                    format!("{:.1} %", s.availability * 100.0),
+                    format!("{:.1} %", s.availele * 100.0),
+                    format!("{:.1} %", s.availnet * 100.0),
                     format!(
                         "{}",
                         if days != 0 {
@@ -299,26 +307,17 @@ impl Data {
                         }
                     )
                 ]);
-
-                // text.push_str(
-                //     format!(
-                //         "{}. {}, available:{:.1}%, last update:{} \n",
-                //         idx,
-                //         s.name,
-                //         s.availability * 100.0,
-                //         if days != 0 {
-                //             format!("{} days ago", days)
-                //         } else {
-                //             "Today".into()
-                //         }
-                //     )
-                //     .as_str(),
-                // );
             }
         }
 
         self.reply = Some(utils::make_reply_text(
-            format!("<pre>Report [{}]:\n{}\n</pre>", period, table.to_string()).as_str(),
+            format!(
+                "<pre>Report: [{} - {}]:\n{}\n</pre>",
+                report_startpoint.date().format("%Y-%m-%d"),
+                utc.date().format("%Y-%m-%d"),
+                table.to_string(),
+            )
+            .as_str(),
         ));
         // log::debug!("Report [{}]:\n{}", period, text);
 
@@ -634,7 +633,8 @@ pub struct ReportSummary {
     name: String,
     manager: String,
     period: report::TimeOffset,
-    availability: f64,
+    availnet: f64,
+    availele: f64,
     last_update: DateTime<Utc>,
 }
 impl ReportSummary {
@@ -643,43 +643,94 @@ impl ReportSummary {
             name: String::default(),
             manager: String::default(),
             period: report::TimeOffset::Day(-1),
-            availability: 0.0,
+            availele: 0.0,
+            availnet: 0.0,
             last_update: Utc::now(),
         }
+    }
+
+    fn calculate_field<F: 'static + Fn(&report::Report) -> bool>(
+        &mut self,
+        collection: &Vec<report::Report>,
+        func: F,
+    ) -> f64 {
+        let mut time_startpoint = Utc::now();
+
+        let mut time_nores_collected = chrono::Duration::zero();
+        let mut time_nores_ts = DateTime::<Utc>::default();
+        let mut elestat_last = true;
+        // let mut time_entry_ts = DateTime::<Utc>::default();
+        collection.iter().for_each(|i| {
+            let time_entry_ts = DateTime::<Utc>::from_utc(
+                NaiveDateTime::parse_from_str(&i.timestamp.value, Config::time_format()).unwrap(),
+                Utc,
+            );
+            if time_entry_ts < time_startpoint {
+                time_startpoint = time_entry_ts;
+            }
+            // log::debug!(
+            //     "time_nores_ts: {}, time_entry_ts: {}, (time_entry_ts - time_nores_ts):{}",
+            //     time_nores_ts,
+            //     time_entry_ts,
+            //     (time_entry_ts - time_nores_ts)
+            // );
+
+            if !func(i) {
+                time_nores_ts = time_entry_ts
+            } else if elestat_last != func(i) {
+                time_nores_collected = time_nores_collected
+                    .checked_add(&(time_entry_ts - time_nores_ts))
+                    .unwrap();
+                time_nores_ts = DateTime::<Utc>::default();
+            }
+            elestat_last = func(i);
+        });
+
+        if time_nores_ts != DateTime::<Utc>::default() {
+            time_nores_collected = time_nores_collected
+                .checked_add(&(Utc::now() - time_nores_ts))
+                .unwrap();
+        }
+
+        // log::debug!(
+        //     "time_nores_collected: {}, time_startpoint: {}",
+        //     time_nores_collected.num_minutes(),
+        //     time_startpoint
+        // );
+        1.0 - (time_nores_collected.num_minutes() as f64
+            / ((Utc::now() - time_startpoint).num_minutes() as f64)) /* 3 due to 8hours work day (24/3=8) */
     }
 }
 impl From<&Vec<report::Report>> for ReportSummary {
     fn from(collection: &Vec<report::Report>) -> Self {
-        let mut last_update = DateTime::<Utc>::from_utc(
-            NaiveDateTime::parse_from_str("1970-01-01 00:00:00", Config::time_format()).unwrap(),
-            Utc,
-        );
-        let mut availability = 0.0;
-        collection.iter().for_each(|i| {
-            if i.network.value && i.electricity.value {
-                availability += 1.0;
-            } else if i.network.value {
-                availability += 0.5;
-            } else {
-            }
-
-            if let Ok(date_time) =
-                NaiveDateTime::parse_from_str(&i.timestamp.value, Config::time_format())
-            {
-                let utc = DateTime::<Utc>::from_utc(date_time, Utc);
-                if utc > last_update {
-                    last_update = utc;
-                }
-            }
-        });
-        availability /= collection.len() as f64;
         let mut summary = ReportSummary::new();
         if !collection.is_empty() {
             summary.name = collection.first().unwrap().name.value.clone();
             summary.manager = collection.first().unwrap().manager.value.clone();
-            summary.availability = availability;
-            summary.last_update = last_update;
+            summary.last_update = DateTime::<Utc>::from_utc(
+                NaiveDateTime::parse_from_str("1970-01-01 00:00:00", Config::time_format())
+                    .unwrap(),
+                Utc,
+            );
+            summary.availele = summary.calculate_field(collection, |i| i.electricity.value);
+            summary.availnet = summary.calculate_field(collection, |i| i.network.value);
+
+            collection.iter().for_each(|i| {
+                if let Ok(date_time) =
+                    NaiveDateTime::parse_from_str(&i.timestamp.value, Config::time_format())
+                {
+                    let utc = DateTime::<Utc>::from_utc(date_time, Utc);
+                    if utc > summary.last_update {
+                        summary.last_update = utc;
+                    }
+                }
+            });
         }
+        log::debug!(
+            "Availability  Network:{:.3}. Electricity:{:.3} ",
+            summary.availnet,
+            summary.availele
+        );
         summary
     }
 }
@@ -715,6 +766,15 @@ fn make_report(
             report_summary.push(report_one)
         }
     }
+    report_summary.sort_by(|a, b| {
+        if a.last_update > b.last_update {
+            Ordering::Less
+        } else if a.last_update == b.last_update {
+            Ordering::Equal
+        } else {
+            Ordering::Greater
+        }
+    });
     Ok(report_summary)
 }
 
