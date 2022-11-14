@@ -141,6 +141,13 @@ impl From<report::Report> for Data {
         {
             d.utc = DateTime::<Utc>::from_utc(date_time, Utc);
         }
+
+        if !item.network.value || !item.electricity.value {
+            d.issues = Some(Issues::default());
+            d.issues.as_mut().unwrap().no_electricity = !item.electricity.value;
+            d.issues.as_mut().unwrap().no_network = !item.network.value;
+            log::debug!("### Write issues");
+        }
         d
     }
 }
@@ -351,6 +358,14 @@ impl Data {
         self.update_timestamp();
         let new_state = state(self);
         log::debug!("</TR> transit to {}", new_state.to_string());
+        new_state
+    }
+
+    pub fn wrap_no_update<S>(self, state: S) -> State
+    where
+        S: 'static + Fn(Self) -> State,
+    {
+        let new_state = state(self);
         new_state
     }
 
@@ -727,7 +742,8 @@ impl From<&Vec<report::Report>> for ReportSummary {
             });
         }
         log::debug!(
-            "Availability  Network:{:.3}. Electricity:{:.3} ",
+            "Colllection_len:{}, Availability  Network:{:.3}. Electricity:{:.3} ",
+            collection.len(),
             summary.availnet,
             summary.availele
         );

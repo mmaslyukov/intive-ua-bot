@@ -28,13 +28,15 @@ impl UserData {
     pub fn init(mut self) -> Self {
         if let Ok(report) = report::Report::new().select_all() {
             let mut map: HashMap<String, report::Report> = HashMap::new();
-            for r in report {
+            report.into_iter().for_each(|r| {
+                // log::debug!("report; {:?}", r);
                 map.insert(r.name.value.clone(), r);
-            }
-            for m in map {
+            });
+
+            map.into_iter().for_each(|m| {
                 self.user_data_table
-                    .insert(m.1.chat_id.value, Data::from(m.1).wrap(fsm::State::Idle));
-            }
+                    .insert(m.1.chat_id.value, Data::from(m.1).wrap_no_update(fsm::State::Idle));
+            });
         }
         self
     }
@@ -47,6 +49,18 @@ impl UserData {
         let mut chat_id_collection = Vec::new();
         for u in &self.user_data_table {
             if Utc::now().signed_duration_since(u.1.data().utc) > chrono::Duration::hours(24) {
+                chat_id_collection.push(u.1.data().chat_id);
+            }
+        }
+        chat_id_collection
+    }
+
+    pub fn find_with_issues(&self) -> Vec<i64> {
+        let mut chat_id_collection = Vec::new();
+        for u in &self.user_data_table {
+            if Utc::now().signed_duration_since(u.1.data().utc) > chrono::Duration::hours(1)
+                && !u.1.data().issues.is_none()
+            {
                 chat_id_collection.push(u.1.data().chat_id);
             }
         }

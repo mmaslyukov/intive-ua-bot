@@ -48,7 +48,13 @@ impl Teladler {
         let user_data = self.user_data.clone();
         thread::spawn(move || loop {
             let chat_id_collection = user_data.lock().unwrap().find_expired();
-            Self::initiate_survey(api.clone(), user_data.clone(), chat_id_collection);
+            if  !chat_id_collection.is_empty() {
+                Self::initiate_survey(api.clone(), user_data.clone(), chat_id_collection);
+            }
+            let chat_id_collection = user_data.lock().unwrap().find_with_issues();
+            if  !chat_id_collection.is_empty() {
+                Self::initiate_survey(api.clone(), user_data.clone(), chat_id_collection);
+            }
             thread::sleep(time::Duration::from_secs(60));
         });
     }

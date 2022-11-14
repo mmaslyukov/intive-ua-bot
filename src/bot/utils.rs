@@ -52,7 +52,7 @@ pub fn reply_report_period_event() -> ReplyEnum {
 
 pub fn reply_report_event() -> ReplyEnum {
     make_reply_inline(
-        "What report do you whant",
+        "What kind of report do you want",
         Some(&[&[Event::ReportMe, Event::ReportTeam, Event::ReportAll]]),
     )
 }
