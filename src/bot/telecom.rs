@@ -112,7 +112,7 @@ impl Telecom {
 
     pub fn handle(api: Arc<Telapi>, update: Update, user_data: Arc<Mutex<UserData>>) {
         match update {
-            Update::Message(msg) => {
+            Update::Message(msg) if msg.text.is_some() => {
                 Self::handle_user_input(api, user_data, UserInput::from_msg(&msg))
             }
             Update::CallbackQuery(query) => {
