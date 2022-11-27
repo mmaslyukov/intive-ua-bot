@@ -35,7 +35,7 @@ pub fn reply_menu_texted(text: &str) -> ReplyEnum {
 
 pub fn reply_survey_event() -> ReplyEnum {
     make_reply_inline(
-        "How are doing you today?",
+        "How are you doing today?",
         Some(&[&[Event::Allright, Event::More]]),
     )
 }
