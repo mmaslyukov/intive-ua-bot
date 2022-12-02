@@ -4,7 +4,6 @@ use typed_builder::TypedBuilder as Builder;
 use core::fmt;
 use std::{
     cmp::Ordering,
-    // time::Duration,
     collections::HashMap,
     str::{self, FromStr},
 };
@@ -271,15 +270,24 @@ impl Data {
         let utc = Utc::now();
         match e {
             Event::ReportOffsetDay => {
-                report_startpoint = utc.with_day(utc.day() - 1).unwrap();
+                report_startpoint = utc - chrono::Duration::days(1);
                 self.report.as_mut().unwrap().offset = report::TimeOffset::Day(1)
             }
             Event::ReportOffsetWeek => {
-                report_startpoint = utc.with_day(utc.day() - 7).unwrap();
+                report_startpoint = utc - chrono::Duration::days(7);
                 self.report.as_mut().unwrap().offset = report::TimeOffset::Day(7)
             }
             Event::ReportOffsetMonth => {
-                report_startpoint = utc.with_month(utc.month() - 1).unwrap();
+                let days = if utc.month() == chrono::Month::December.number_from_month() {
+                    chrono::NaiveDate::from_ymd_opt(utc.year() + 1, 1, 1).unwrap()
+                } else {
+                    chrono::NaiveDate::from_ymd_opt(utc.year(), utc.month() + 1, 1).unwrap()
+                }
+                .signed_duration_since(
+                    chrono::NaiveDate::from_ymd_opt(utc.year(), utc.month(), 1).unwrap(),
+                )
+                .num_days();
+                report_startpoint = utc - chrono::Duration::days(days);
                 self.report.as_mut().unwrap().offset = report::TimeOffset::Month(1)
             }
             _ => result = Error::Verbose(format!("Unexpected event: {}", e)).wrap(),
